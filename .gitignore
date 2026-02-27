@@ -1,0 +1,86 @@
+# ______________________________________________________________________________
+# R
+# ______________________________________________________________________________
+.Rhistory
+.RData
+.Rproj.user/
+.httr-oauth
+*.Rproj
+
+# renv
+renv/library/
+renv/local/
+renv/lock/
+renv/python/
+
+# Rendered outputs (regenerate from source)
+*.html
+!*_files/
+
+# ______________________________________________________________________________
+# GIS — large / binary data
+# ______________________________________________________________________________
+
+# Rasters (DEM, satellite imagery — typically 100MB+)
+gis/raster/
+*.tif
+*.tiff
+*.img
+*.nc
+*.hdf
+*.hdf5
+*.h5
+*.adf
+*.vrt
+
+# Unzipped vector data (regenerated from zips)
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.fbn
+*.fbx
+*.ain
+*.aih
+*.atx
+*.ixs
+*.mxs
+*.qpj
+
+# GeoPackage (large binary)
+*.gpkg
+
+# Processed / derived GIS outputs
+gis/processed/
+gis/derived/
+output/gis/
+
+# ______________________________________________________________________________
+# Large archives (DEM tarballs can be several GB)
+# ______________________________________________________________________________
+*.tar.gz
+*.tar
+*.gz
+!*.shp.zip
+!*.geojson.zip
+!*.gdb.zip
+!*.zip
+
+# ______________________________________________________________________________
+# macOS
+# ______________________________________________________________________________
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ______________________________________________________________________________
+# Temporary / cache
+# ______________________________________________________________________________
+*.tmp
+*.cache
+__pycache__/
+.claude/
