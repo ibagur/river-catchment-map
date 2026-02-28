@@ -25,7 +25,8 @@ derived_files_01 <- c(
   "gis/derived/mecufi_dem_raw.tif",
   "gis/derived/mecufi_waterways_lines_utm.gpkg",
   "gis/derived/mecufi_waterways_polys_utm.gpkg",
-  "gis/derived/mecufi_roads_utm.gpkg"
+  "gis/derived/mecufi_roads_utm.gpkg",
+  "gis/derived/mecufi_places_utm.gpkg"
 )
 
 if (all(file.exists(derived_files_01)) && !force_rerun["load_data"]) {
@@ -36,6 +37,7 @@ if (all(file.exists(derived_files_01)) && !force_rerun["load_data"]) {
   waterways_lines_utm <- sf::st_read("gis/derived/mecufi_waterways_lines_utm.gpkg", quiet = TRUE)
   waterways_polys_utm <- sf::st_read("gis/derived/mecufi_waterways_polys_utm.gpkg", quiet = TRUE)
   roads_utm           <- sf::st_read("gis/derived/mecufi_roads_utm.gpkg",       quiet = TRUE)
+  places_utm          <- sf::st_read("gis/derived/mecufi_places_utm.gpkg",      quiet = TRUE)
 
 } else {
 
@@ -195,26 +197,57 @@ sf::st_write(waterways_polys_utm, "gis/derived/mecufi_waterways_polys_utm.gpkg",
 # ROADS ----
 # ______________________________________________________________________________
 
-roads_zip  <- normalizePath("gis/roads/moz_roads_shp.zip")
+roads_zip  <- normalizePath("gis/roads/hotosm_moz_roads_lines_shp.zip")
 roads_contents <- unzip(roads_zip, list = TRUE)
-roads_shp  <- roads_contents$Name[grepl("\\.shp$", roads_contents$Name)][1]
+roads_shp  <- roads_contents$Name[grepl("[.]shp$", roads_contents$Name)][1]
 
 ## ---- 2 km buffer for roads (show context near district boundary) ----
 mecufi_buf2km <- sf::st_buffer(mecufi_utm, 2000)
+
+# Keep motorway → tertiary (named/classified roads) plus tracks and paths;
+# exclude service, living_street, steps, construction, etc.
+osm_road_types <- c(
+  "motorway", "motorway_link",
+  "trunk", "trunk_link",
+  "primary", "primary_link",
+  "secondary", "secondary_link",
+  "tertiary", "tertiary_link",
+  "unclassified", "residential",
+  "track", "path", "footway", "bridleway"
+)
 
 roads_utm <- sf::st_read(
   paste0("/vsizip/", roads_zip, "/", roads_shp),
   quiet = TRUE
 ) %>%
+  dplyr::filter(highway %in% osm_road_types) %>%
   sf::st_transform(EPSG_TARGET) %>%
   sf::st_filter(mecufi_buf2km)
 
 sf::st_write(roads_utm, "gis/derived/mecufi_roads_utm.gpkg",
              delete_dsn = TRUE, quiet = TRUE)
 
+# ______________________________________________________________________________
+# POPULATED PLACES ----
+# ______________________________________________________________________________
+
+places_zip  <- normalizePath("gis/places/hotosm_moz_populated_places_points_shp.zip")
+places_shp  <- "hotosm_moz_populated_places_points_shp.shp"
+
+places_utm <- sf::st_read(
+  paste0("/vsizip/", places_zip, "/", places_shp),
+  quiet = TRUE
+) %>%
+  dplyr::filter(place %in% c("city", "town", "village", "hamlet")) %>%
+  sf::st_transform(EPSG_TARGET) %>%
+  sf::st_filter(mecufi_utm)
+
+sf::st_write(places_utm, "gis/derived/mecufi_places_utm.gpkg",
+             delete_dsn = TRUE, quiet = TRUE)
+
 message(sprintf(
-  "01_load_data complete: %d waterway lines, %d waterway polys, %d road features",
-  nrow(waterways_lines_utm), nrow(waterways_polys_utm), nrow(roads_utm)
+  "01_load_data complete: %d waterway lines, %d waterway polys, %d road features, %d places",
+  nrow(waterways_lines_utm), nrow(waterways_polys_utm), nrow(roads_utm), nrow(places_utm)
 ))
 
 } # end cache-miss block

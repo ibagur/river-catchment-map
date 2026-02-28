@@ -41,6 +41,7 @@ watersheds_utm      <- sf::st_read("gis/derived/mecufi_watersheds.gpkg",        
 waterways_lines_utm <- sf::st_read("gis/derived/mecufi_waterways_lines_utm.gpkg", quiet = TRUE)
 waterways_polys_utm <- sf::st_read("gis/derived/mecufi_waterways_polys_utm.gpkg", quiet = TRUE)
 roads_utm           <- sf::st_read("gis/derived/mecufi_roads_utm.gpkg",           quiet = TRUE)
+places_utm          <- sf::st_read("gis/derived/mecufi_places_utm.gpkg",          quiet = TRUE)
 mecufi_utm          <- sf::st_read("gis/derived/mecufi_boundary_utm.gpkg",        quiet = TRUE)
 
 # ______________________________________________________________________________
@@ -249,21 +250,44 @@ if (nrow(waterways_lines_utm) > 0) {
 }
 
 ## ---- Conditionally append roads layer ----
-# if (nrow(roads_utm) > 0) {
-#   map_out <- map_out +
-#     tm_shape(roads_utm) +
-#       tm_lines(
-#         col       = "#888888",
-#         lwd       = 0.5,
-#         col_alpha = 0.60
-#       )
-# }
+if (nrow(roads_utm) > 0) {
+  map_out <- map_out +
+    tm_shape(roads_utm) +
+      tm_lines(
+        col        = "#CC2200",
+        lwd        = 0.8,
+        col_alpha  = 0.70,
+        col.legend = tm_legend_hide()
+      )
+}
+
+## ---- Conditionally append populated places layer ----
+if (nrow(places_utm) > 0) {
+  map_out <- map_out +
+    tm_shape(places_utm) +
+      tm_dots(
+        size      = 0.25,
+        fill      = "#CC2200",
+        col       = "#CC2200",
+        lwd       = 0.8
+      ) +
+    tm_shape(places_utm) +
+      tm_text(
+        text      = "name",
+        size      = 0.45,
+        col       = "#444444",
+        fontface  = "bold",
+        options   = opt_tm_text(shadow = FALSE),
+        xmod      = 0.4,
+        ymod      = 0.4
+      )
+}
 
 ## ---- Layer 10: District boundary — always on top of optional layers ----
 map_out <- map_out +
   tm_shape(mecufi_utm) +
     tm_borders(
-      col = "#CC2200",
+      col = "#444444",
       lwd = 2.0
     )
 
