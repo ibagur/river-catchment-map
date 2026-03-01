@@ -1,8 +1,10 @@
 # River Catchment Map — Mecufi District, Cabo Delgado, Mozambique
 
-An R pipeline that produces a publication-quality river catchment map for Mecufi District, combining hydrological analysis (D8 flow routing, watershed delineation) with cartographic composition in tmap v4.
+An R pipeline that produces publication-quality river catchment maps for Mecufi District, combining hydrological analysis (D8 flow routing, watershed delineation) with cartographic composition in tmap v4. A flood exposure layer overlays population density weighted by drainage proximity, producing two map variants that compare different population datasets.
 
-**Primary output:** `output/mecufi_catchment_map.png` (300 dpi, 250 × 200 mm)
+**Primary outputs** (300 dpi, 250 × 200 mm):
+- `output/mecufi_catchment_map_real.png` — flood exposure using Maxar building-footprint counts
+- `output/mecufi_catchment_map_estimated.png` — flood exposure using WorldPop 2026 RF model
 
 ---
 
@@ -55,7 +57,9 @@ Place source files in `gis/` before running. The pipeline reads archives directl
 | Folder | File | Source |
 |--------|------|--------|
 | `gis/admin/` | `moz_admin_boundaries.shp.zip` | OCHA — ADM2 district boundaries |
-| `gis/raster/` | `rasters_COP30.tar.gz` | Copernicus GLO-30 DEM tiles |
+| `gis/raster/elevation/` | `rasters_COP30.tar.gz` | Copernicus GLO-30 DEM tiles |
+| `gis/raster/population/` | `MOZ_population_v1_1_gridded.tif` | Maxar — building-footprint constrained counts |
+| `gis/raster/population/` | `moz_pop_2026_CN_100m_R2025A_v1.tif` | WorldPop 2026 RF model, 100 m |
 | `gis/waterways/` | `hotosm_moz_waterways_lines_shp.zip` | HOT OSM |
 | `gis/waterways/` | `hotosm_moz_waterways_polygons_shp.zip` | HOT OSM |
 | `gis/roads/` | `hotosm_moz_roads_lines_shp.zip` | HOT OSM |
@@ -111,7 +115,8 @@ All tunable parameters live at the top of `run_analysis.R`:
 
 | File | Description |
 |------|-------------|
-| `output/mecufi_catchment_map.png` | Primary map — 300 dpi, 250 × 200 mm |
+| `output/mecufi_catchment_map_real.png` | Map with Maxar population exposure — 300 dpi, 250 × 200 mm |
+| `output/mecufi_catchment_map_estimated.png` | Map with WorldPop 2026 exposure — 300 dpi, 250 × 200 mm |
 | `output/mecufi_contours.shp` | Smoothed contour lines with `is_major` column |
 | `output/mecufi_watersheds.shp` | Delineated catchment polygons |
 | `output/mecufi_flow_acc.tif` | D8 flow accumulation (DEFLATE compressed) |
@@ -129,11 +134,33 @@ The map layers, rendered bottom to top:
 3. **River glow** — distance-decay halo centred on channel pixels; main stems glow wider than tributaries via log-normalised flow accumulation weighting
 4. **Contours** — minor (50 m, light grey) and major (250 m, darker grey)
 5. **Watershed polygons** — semi-transparent blue fills with steel-blue borders
-6. **Waterway polygons** — solid water bodies (lakes, wide rivers)
-7. **Waterway lines** — stream and river network
-8. **Roads** — HOT OSM road network
-9. **Populated places** — point markers and name labels
-10. **District boundary** — dark grey border, always rendered on top
+6. **Flood exposure** — population × drainage proximity score (YlOrRd, four discrete classes); varies between map variants
+7. **Waterway polygons** — solid water bodies (lakes, wide rivers)
+8. **Waterway lines** — stream and river network
+9. **Roads** — HOT OSM road network
+10. **Populated places** — point markers and name labels
+11. **District boundary** — dark grey border, always rendered on top
+
+### Dual-output architecture
+
+`05_map.R` wraps the full layer stack in a `build_map()` helper parameterised by the exposure raster, legend label, and population credits suffix. Both variants are produced in a single pipeline run; all other layers are shared.
+
+### Flood exposure methodology
+
+```r
+# 1. Proximity: exponential decay from drainage channels (e-folding = 400 m)
+flood_channels <- terra::ifel(flow_acc >= 500L, 1L, NA)
+dist_to_flood  <- terra::distance(flood_channels)
+flood_prox     <- exp(-dist_to_flood / 400)
+
+# 2. Raw exposure: population × proximity
+exposure_raw <- pop_resampled * flood_prox
+
+# 3. Log-normalise to [0, 1] relative to district maximum
+exposure_norm <- log1p(exposure_raw) / max(log1p(exposure_raw))
+```
+
+The Maxar variant masks to cells with confirmed building footprints; the WorldPop variant applies a population threshold (>= 1 person per cell) plus a bottom-quartile cut to suppress background noise from the continuous RF model.
 
 ### River glow technique
 
@@ -178,6 +205,8 @@ Hardcoded to the Mecufi DEM range (0–375 m). Update `hyps_breaks` and `hyps_co
 | Copernicus GLO-30 DEM | ESA / Copernicus | Free for non-commercial use |
 | Admin boundaries (ADM2) | OCHA | HDX Open Data |
 | Waterways, roads, places | HOT OpenStreetMap | ODbL |
+| Population v1.1 (building-footprint) | Maxar / GRID3 | CC BY 4.0 |
+| Population 2026 RF model | WorldPop | CC BY 4.0 |
 
 ---
 

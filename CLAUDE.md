@@ -67,11 +67,15 @@ Scripts communicate through shared R objects (no explicit `return()`). After eac
 
 ```
 gis/
-├── admin/      moz_admin_boundaries.shp.zip    (OCHA; ADM2 layer = districts)
-├── raster/     rasters_COP30.tar.gz            (Copernicus GLO-30 DEM tiles)
-├── waterways/  hotosm_moz_waterways_lines_shp.zip
-│               hotosm_moz_waterways_polygons_shp.zip
-└── roads/      moz_roads_shp.zip
+├── admin/               moz_admin_boundaries.shp.zip          (OCHA; ADM2 layer = districts)
+├── raster/
+│   ├── elevation/       rasters_COP30.tar.gz                  (Copernicus GLO-30 DEM tiles)
+│   │                    rasters_AW3D30.tar.gz                 (ALOS AW3D30 DEM — unused)
+│   └── population/      MOZ_population_v1_1_gridded.tif       (Maxar building-footprint pop.)
+│                        moz_pop_2026_CN_100m_R2025A_v1.tif    (WorldPop 2026, 100 m — unused)
+├── waterways/           hotosm_moz_waterways_lines_shp.zip
+│                        hotosm_moz_waterways_polygons_shp.zip
+└── roads/               moz_roads_shp.zip
 ```
 
 All archives are read directly via `/vsizip/` (shapefiles) or `untar()` (rasters) — no manual extraction needed unless `gis/derived/` cache is empty.

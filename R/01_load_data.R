@@ -5,15 +5,19 @@
 #           compressed source archives. Filter all layers to Mecufi District,
 #           reproject to UTM 37S, and cache to gis/derived/.
 # Inputs  : gis/admin/moz_admin_boundaries.shp.zip
-#           gis/raster/rasters_COP30.tar.gz
+#           gis/raster/elevation/rasters_COP30.tar.gz
+#           gis/raster/population/MOZ_population_v1_1_gridded.tif  (Maxar)
+#           gis/raster/population/moz_pop_2026_CN_100m_R2025A_v1.tif (WorldPop)
 #           gis/roads/moz_roads_shp.zip
 #           gis/waterways/hotosm_moz_waterways_lines_shp.zip
 #           gis/waterways/hotosm_moz_waterways_polygons_shp.zip
 # Outputs : gis/derived/mecufi_boundary_utm.gpkg
-#           gis/derived/mecufi_dem_raw.tif   (mosaiced COP30 tiles, WGS84)
+#           gis/derived/mecufi_dem_raw.tif       (mosaiced COP30 tiles, WGS84)
 #           gis/derived/mecufi_waterways_lines_utm.gpkg
 #           gis/derived/mecufi_waterways_polys_utm.gpkg
 #           gis/derived/mecufi_roads_utm.gpkg
+#           gis/derived/mecufi_pop_real_utm.tif  (Maxar building-footprint pop.)
+#           gis/derived/mecufi_pop_estimated_utm.tif (WorldPop 2026 RF 100 m)
 # ______________________________________________________________________________
 
 # ______________________________________________________________________________
@@ -26,7 +30,9 @@ derived_files_01 <- c(
   "gis/derived/mecufi_waterways_lines_utm.gpkg",
   "gis/derived/mecufi_waterways_polys_utm.gpkg",
   "gis/derived/mecufi_roads_utm.gpkg",
-  "gis/derived/mecufi_places_utm.gpkg"
+  "gis/derived/mecufi_places_utm.gpkg",
+  "gis/derived/mecufi_pop_real_utm.tif",
+  "gis/derived/mecufi_pop_estimated_utm.tif"
 )
 
 if (all(file.exists(derived_files_01)) && !force_rerun["load_data"]) {
@@ -38,6 +44,8 @@ if (all(file.exists(derived_files_01)) && !force_rerun["load_data"]) {
   waterways_polys_utm <- sf::st_read("gis/derived/mecufi_waterways_polys_utm.gpkg", quiet = TRUE)
   roads_utm           <- sf::st_read("gis/derived/mecufi_roads_utm.gpkg",       quiet = TRUE)
   places_utm          <- sf::st_read("gis/derived/mecufi_places_utm.gpkg",      quiet = TRUE)
+  pop_real_utm        <- terra::rast("gis/derived/mecufi_pop_real_utm.tif")
+  pop_estimated_utm   <- terra::rast("gis/derived/mecufi_pop_estimated_utm.tif")
 
 } else {
 
@@ -112,11 +120,12 @@ sf::st_write(mecufi_utm, "gis/derived/mecufi_boundary_utm.gpkg",
 # DEM (COP30) ----
 # ______________________________________________________________________________
 
-## ---- Extract tar.gz if not already done ----
-raster_tar <- "gis/raster/rasters_COP30.tar.gz"
-raster_dir  <- "gis/raster"
+## ---- Extract tar.gz into dedicated subdirectory to avoid mixing with other rasters ----
+raster_tar <- "gis/raster/elevation/rasters_COP30.tar.gz"
+raster_dir  <- "gis/raster/elevation/cop30"
 
-# Only extract if no .tif files present
+dir.create(raster_dir, showWarnings = FALSE, recursive = TRUE)
+
 if (length(list.files(raster_dir, pattern = "\\.tif$", recursive = TRUE)) == 0) {
   message("Extracting COP30 raster archive...")
   untar(raster_tar, exdir = raster_dir)
@@ -125,7 +134,7 @@ if (length(list.files(raster_dir, pattern = "\\.tif$", recursive = TRUE)) == 0) 
 ## ---- Find all DEM tiles ----
 dem_files <- list.files(
   raster_dir,
-  pattern  = "\\.tif$",
+  pattern    = "\\.tif$",
   full.names = TRUE,
   recursive  = TRUE
 )
@@ -244,6 +253,52 @@ places_utm <- sf::st_read(
 
 sf::st_write(places_utm, "gis/derived/mecufi_places_utm.gpkg",
              delete_dsn = TRUE, quiet = TRUE)
+
+# ______________________________________________________________________________
+# POPULATION RASTERS ----
+# ______________________________________________________________________________
+
+## ---- Population raster (Maxar / MOZ gridded v1.1) ----
+# Building-footprint-constrained population counts, ~93 m native resolution.
+# Cropped to 500 m buffer, projected to UTM 37S, masked to district boundary.
+pop_real_src <- "gis/raster/population/MOZ_population_v1_1_gridded.tif"
+
+# Raster is WGS84 — buffer and crop in WGS84, then project to UTM
+mecufi_buf_wgs84 <- sf::st_transform(sf::st_buffer(mecufi_utm, 500), 4326)
+
+pop_real_utm <- terra::rast(pop_real_src) %>%
+  terra::crop(terra::vect(mecufi_buf_wgs84)) %>%
+  terra::project(paste0("EPSG:", EPSG_TARGET), method = "bilinear") %>%
+  terra::mask(terra::vect(mecufi_utm))
+
+assert_overlap(pop_real_utm, mecufi_utm)
+
+terra::writeRaster(
+  pop_real_utm,
+  "gis/derived/mecufi_pop_real_utm.tif",
+  overwrite = TRUE,
+  gdal      = "COMPRESS=DEFLATE"
+)
+
+## ---- Population raster (WorldPop 2026 RF / 100 m) ----
+# Random-forest modelled counts constrained to census totals, 100 m resolution.
+# Continuous grid-wide estimates — no building mask.
+pop_est_src <- "gis/raster/population/moz_pop_2026_CN_100m_R2025A_v1.tif"
+mecufi_buf_wgs84_est <- sf::st_transform(sf::st_buffer(mecufi_utm, 500), 4326)
+
+pop_estimated_utm <- terra::rast(pop_est_src) %>%
+  terra::crop(terra::vect(mecufi_buf_wgs84_est)) %>%
+  terra::project(paste0("EPSG:", EPSG_TARGET), method = "bilinear") %>%
+  terra::mask(terra::vect(mecufi_utm))
+
+assert_overlap(pop_estimated_utm, mecufi_utm)
+
+terra::writeRaster(
+  pop_estimated_utm,
+  "gis/derived/mecufi_pop_estimated_utm.tif",
+  overwrite = TRUE,
+  gdal      = "COMPRESS=DEFLATE"
+)
 
 message(sprintf(
   "01_load_data complete: %d waterway lines, %d waterway polys, %d road features, %d places",
